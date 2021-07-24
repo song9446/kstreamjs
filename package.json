@@ -1,0 +1,35 @@
+{
+  "name": "kstreamjs",
+  "version": "0.1.0",
+  "description": "kstream inspired nodejs kafka stream framework backed by kafkajs",
+  "author": "song9446",
+  "main": "build/src/index.js",
+  "types": "build/src/index.d.ts",
+  "files": [
+    "build/src"
+  ],
+  "license": "Apache-2.0",
+  "keywords": [],
+  "scripts": {
+    "test": "jest",
+    "lint": "gts lint",
+    "clean": "gts clean",
+    "compile": "tsc",
+    "fix": "gts fix",
+    "prepare": "npm run compile",
+    "pretest": "npm run compile",
+    "posttest": "npm run lint",
+    "prepublish": "npm t"
+  },
+  "devDependencies": {
+    "@types/jest": "^26.0.24",
+    "@types/node": "^14.11.2",
+    "gts": "^3.1.0",
+    "ts-jest": "^27.0.4",
+    "typescript": "^4.0.3"
+  },
+  "dependencies": {
+    "kafkajs": "^1.15.0",
+    "node-channel": "^1.1.3"
+  }
+}
