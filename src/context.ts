@@ -38,6 +38,11 @@ export interface Offset {
 export class Statistics {
   public recvTotal = 0;
   public sendTotal = 0;
+  merge(other: Statistics): Statistics {
+    this.recvTotal += other.recvTotal;
+    this.sendTotal += other.sendTotal;
+    return this;
+  }
 }
 
 export interface StreamContextOption {

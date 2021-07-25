@@ -1,4 +1,4 @@
-import {StreamContext, Message} from './context';
+import {StreamContext, Message, Statistics} from './context';
 import {createStream} from './stream';
 
 function mockMessages<T>(
@@ -28,6 +28,14 @@ describe('with mock kafka context', () => {
     StreamContext.prototype.receive = jest.fn().mockImplementation(async () => {
       return mockData.splice(0, 1);
     });
+    StreamContext.prototype.flushStatistics = jest
+      .fn()
+      .mockImplementation(() => {
+        const s = new Statistics();
+        s.recvTotal = 1;
+        s.sendTotal = 1;
+        return s;
+      });
   });
   afterAll(() => {
     jest.clearAllMocks();
@@ -120,5 +128,15 @@ describe('with mock kafka context', () => {
     msgs = await stream.handleMessages();
     expected = [{value: 'ca'}, {value: 'za'}, {value: 'da'}, {value: 'za'}];
     expect(msgs).toMatchObject(expected);
+  });
+
+  it('flush statistics', async () => {
+    const stream1 = createStreamHelper();
+    const stream2 = createStreamHelper();
+    const stats = stream1.union(stream2).flushStatistics();
+    expect(stats).toMatchObject({
+      recvTotal: 2,
+      sendTotal: 2,
+    });
   });
 });

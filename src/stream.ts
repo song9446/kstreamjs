@@ -4,6 +4,7 @@ import {
   Message,
   Offset,
   StreamContextOption,
+  Statistics,
 } from './context';
 
 type ElementOf<T> = T extends readonly (infer ET)[] ? ET : never;
@@ -211,6 +212,11 @@ export class Stream<O> {
       await this.contexts[0].send(topic, messages);
       return messages;
     });
+  }
+  flushStatistics(): Statistics {
+    return this.contexts
+      .map(c => c.flushStatistics())
+      .reduce((acc, s) => acc.merge(s));
   }
   async start(): Promise<Stream<O>> {
     let done = false;
