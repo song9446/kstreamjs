@@ -44,7 +44,7 @@ describe('with mock kafka context', () => {
     return createStream<T>({
       brokers: ['a'],
       inputTopic: 'in-topic',
-      clientId: 'client-id',
+      groupId: 'group-id',
     });
   }
   it('creates identical stream', async () => {

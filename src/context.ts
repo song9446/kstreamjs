@@ -48,7 +48,8 @@ export class Statistics {
 export interface StreamContextOption {
   brokers: string[];
   inputTopic: string;
-  clientId: string;
+  groupId: string;
+  clientId?: string;
   commitInterval?: number;
   logger?: Logger;
 }
@@ -68,12 +69,12 @@ export class StreamContext {
 
   constructor(option: StreamContextOption) {
     this.kafka = new Kafka({
-      clientId: option.clientId,
+      clientId: option.clientId ?? option.groupId,
       brokers: option.brokers,
     });
     this.producer = this.kafka.producer();
     this.consumer = this.kafka.consumer({
-      groupId: option.clientId,
+      groupId: option.groupId,
     });
     this.admin = this.kafka.admin();
     this.inputTopic = option.inputTopic;
