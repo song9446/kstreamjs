@@ -1,6 +1,6 @@
 {
   "name": "kstreamjs",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "kstream inspired nodejs kafka stream framework backed by kafkajs",
   "author": "song9446",
   "main": "build/src/index.js",
@@ -25,6 +25,7 @@
     "@types/node": "^14.11.2",
     "gts": "^3.1.0",
     "jest": "^27.0.6",
+    "testcontainers": "^7.18.1",
     "ts-jest": "^27.0.4",
     "typescript": "^4.0.3"
   },

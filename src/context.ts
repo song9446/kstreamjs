@@ -22,6 +22,7 @@ export type MessageMetadata = Omit<EachMessagePayload, 'message'> & {
     partition: number;
     offset: string;
   }[];
+  contexts: StreamContext[];
 };
 
 export interface Message<T> {
@@ -49,12 +50,14 @@ export interface StreamContextOption {
   brokers: string[];
   inputTopic: string;
   groupId: string;
+  fromBeginning?: boolean;
   clientId?: string;
   commitInterval?: number;
   logger?: Logger;
 }
 
 export class StreamContext {
+  id: number;
   kafka: Kafka;
   producer: Producer;
   consumer: Consumer;
@@ -64,7 +67,8 @@ export class StreamContext {
   commitOffsets: Offset[] = [];
   commitInterval = 60_000;
   commitTimer?: ReturnType<typeof setInterval>;
-  messageChannel: Channel<EachMessagePayload> = new Channel(10000);
+  messageChannel: Channel<EachMessagePayload> = new Channel(1000);
+  fromBeginning: boolean;
   logger: Logger;
 
   constructor(option: StreamContextOption) {
@@ -79,6 +83,8 @@ export class StreamContext {
     this.admin = this.kafka.admin();
     this.inputTopic = option.inputTopic;
     this.logger = option.logger ?? console;
+    this.fromBeginning = option.fromBeginning ?? false;
+    this.id = Math.random();
     if (option.commitInterval) this.commitInterval = option.commitInterval;
   }
   async start() {
@@ -87,6 +93,7 @@ export class StreamContext {
     await this.consumer.connect();
     this.consumer.subscribe({
       topic: this.inputTopic,
+      fromBeginning: this.fromBeginning,
     });
     this.consumer.run({
       autoCommit: false,
@@ -118,6 +125,7 @@ export class StreamContext {
     const metadata: MessageMetadata = {
       message: {timestamp: Number(timestamp), ...restMessage},
       ...restPayload,
+      contexts: [this],
     };
     if (value) {
       const message = {metadata, value: JSON.parse(value.toString())};
@@ -126,37 +134,51 @@ export class StreamContext {
     } else return [];
   }
   async updateCommitOffsets<T>(messages: Message<T>[]): Promise<void> {
-    const commitOffsets = messages.reduce((acc, m) => {
+    const contexts: Record<number, StreamContext> = {};
+    const commitOffsetsByContextId: Record<number, Record<string, Offset>> = {};
+    for (const m of messages) {
+      for (const context of m.metadata.contexts) {
+        commitOffsetsByContextId[context.id] = {};
+        contexts[context.id] = context;
+      }
       if (m.metadata.commitOffsets) {
         for (const o of m.metadata.commitOffsets!) {
           const key = `${o.topic}:${o.partition}`;
-          acc[key] = {
-            partition: o.partition,
-            topic: o.topic,
+          for (const context of m.metadata.contexts) {
+            commitOffsetsByContextId[context.id][key] = {
+              partition: o.partition,
+              topic: o.topic,
+              offset: String(
+                Math.max(
+                  Number(
+                    commitOffsetsByContextId[context.id][key]?.offset || 0
+                  ),
+                  Number(m.metadata.message.offset)
+                )
+              ),
+            };
+          }
+        }
+      } else {
+        const key = `${m.metadata.topic}:${m.metadata.partition}`;
+        for (const context of m.metadata.contexts) {
+          commitOffsetsByContextId[context.id][key] = {
+            partition: m.metadata.partition,
+            topic: m.metadata.topic,
             offset: String(
               Math.max(
-                Number(acc[key]?.offset || 0),
+                Number(commitOffsetsByContextId[context.id][key]?.offset || 0),
                 Number(m.metadata.message.offset)
               )
             ),
           };
         }
-      } else {
-        const key = `${m.metadata.topic}:${m.metadata.partition}`;
-        acc[key] = {
-          partition: m.metadata.partition,
-          topic: m.metadata.topic,
-          offset: String(
-            Math.max(
-              Number(acc[key]?.offset || 0),
-              Number(m.metadata.message.offset)
-            )
-          ),
-        };
       }
-      return acc;
-    }, {} as Record<string, Offset>);
-    this.commitOffsets = Object.values(commitOffsets);
+    }
+    for (const id in contexts) {
+      contexts[id].commitOffsets = Object.values(commitOffsetsByContextId[id]);
+    }
+    //this.commitOffsets = Object.values(commitOffsets);
   }
   async onDisconnect(callback: (...args: unknown[]) => void) {
     this.consumer.on(this.consumer.events.DISCONNECT, callback);

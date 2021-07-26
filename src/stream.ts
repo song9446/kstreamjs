@@ -90,9 +90,11 @@ export class Stream<O> {
       };
       return acc;
     }, {} as Record<string, Offset>);
+    const contexts = messages.map(m => m.metadata.contexts).flat();
     return {
       metadata: Object.assign(messages[0].metadata, {
         offsets: Object.values(offsets),
+        contexts: contexts,
       }),
       value: messages.map(msg => msg.value),
     };
@@ -197,11 +199,26 @@ export class Stream<O> {
     });
   }
   union(other: Stream<O>): Stream<O> {
+    let messageQueue: Message<O>[] = [];
     const myHandleMessages = this.handleMessages;
+    const handleMessages1 = async () => {
+      const res = await myHandleMessages();
+      messageQueue.push(...res);
+    };
+    const handleMessages2 = async () => {
+      const res = await other.handleMessages();
+      messageQueue.push(...res);
+    };
     this.handleMessages = async () => {
-      const messages = await myHandleMessages();
-      messages.push(...(await other.handleMessages()));
-      return messages;
+      if (messageQueue.length === 0)
+        await Promise.any([handleMessages1(), handleMessages2()]);
+      if (messageQueue.length > 0) {
+        const messages = messageQueue;
+        messageQueue = [];
+        return messages;
+      } else {
+        return [];
+      }
     };
     this.contexts.push(...other.contexts);
     return this;
@@ -209,7 +226,8 @@ export class Stream<O> {
   writeTo(topic: string): Stream<O> {
     return new Stream(this.contexts, async () => {
       const messages = await this.handleMessages();
-      await this.contexts[0].send(topic, messages);
+      if (messages && messages.length > 0)
+        await this.contexts[0].send(topic, messages);
       return messages;
     });
   }

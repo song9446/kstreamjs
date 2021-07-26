@@ -3,12 +3,14 @@ import {createStream} from './stream';
 
 function mockMessages<T>(
   values: T[],
+  contexts: StreamContext[],
   timestampes: number[] = []
 ): Message<T>[] {
   return values.map((value, i) => ({
     metadata: {
       topic: '',
       partition: 0,
+      contexts: contexts,
       message: {
         timestamp: timestampes[i] || 0,
         key: Buffer.from('', 'utf8'),
@@ -22,7 +24,7 @@ function mockMessages<T>(
 }
 
 describe('with mock kafka context', () => {
-  let mockData = mockMessages<unknown>([{a: 1}]);
+  let mockData: Message<unknown>[] = [];
   beforeAll(() => {
     jest.mock('./context');
     StreamContext.prototype.receive = jest.fn().mockImplementation(async () => {
@@ -48,48 +50,48 @@ describe('with mock kafka context', () => {
     });
   }
   it('creates identical stream', async () => {
-    mockData = mockMessages([{a: 1}]);
     const stream = createStreamHelper();
+    mockData = mockMessages([{a: 1}], stream.contexts);
     const msgs = await stream.handleMessages();
     const expected = [{value: {a: 1}}];
     expect(msgs).toMatchObject(expected);
   });
   it('maps stream', async () => {
     const data = {a: 1};
-    mockData = mockMessages([data]);
     const stream = createStreamHelper<typeof data>().map(i => ({
       a: i['a'] + 1,
     }));
+    mockData = mockMessages([data], stream.contexts);
     const msgs = await stream.handleMessages();
     const expected = [{value: {a: 2}}];
     expect(msgs).toMatchObject(expected);
   });
   it('filter stream', async () => {
     const data = [{a: 1}, {a: 2}, {a: 3}, {a: 1}];
-    mockData = mockMessages(data);
     const stream = createStreamHelper<typeof data[number]>().filter(
       i => i['a'] > 2
     );
+    mockData = mockMessages(data, stream.contexts);
     const msgs = await stream.handleMessages();
     const expected = [{value: {a: 3}}];
     expect(msgs).toMatchObject(expected);
   });
 
   it('explode stream', async () => {
-    mockData = mockMessages([[{a: 1}, {b: 2}]]);
     const stream = createStreamHelper<typeof mockData>().explode();
+    mockData = mockMessages([[{a: 1}, {b: 2}]], stream.contexts);
     const msgs = await stream.handleMessages();
     const expected = [{value: {a: 1}}, {value: {b: 2}}];
     expect(msgs).toMatchObject(expected);
   });
   it('aggregates stream by window', async () => {
     const data = [{a: 1}, {a: 2}, {a: 3}, {a: 4}, {a: 5}];
-    mockData = mockMessages(data, [0, 1, 2, 3, 4, 5]);
     const stream = createStreamHelper<typeof data[0]>().window({
       from: 0,
       interval: 2,
       collect: msgs => msgs.reduce((acc, i) => i['a'] + acc, 0),
     });
+    mockData = mockMessages(data, stream.contexts, [0, 1, 2, 3, 4, 5]);
     let msgs = await stream.handleMessages();
     let expected = [{value: 3}];
     expect(msgs).toMatchObject(expected);
@@ -99,9 +101,10 @@ describe('with mock kafka context', () => {
   });
   it('union streams', async () => {
     const data = [1, 2, 3, 4];
-    mockData = mockMessages(data);
     const stream2 = createStreamHelper<typeof data[0]>().map(i => i * 10);
     const stream = createStreamHelper<typeof data[0]>().union(stream2);
+    mockData = mockMessages(data.slice(0, 2), stream.contexts);
+    mockData.push(...mockMessages(data.slice(2, 4), stream2.contexts));
     const msgs = [];
     for (let i = 0; i < 4; ++i) msgs.push(...(await stream.handleMessages()));
     const expected = [{value: 1}, {value: 20}, {value: 3}, {value: 40}];
@@ -110,7 +113,6 @@ describe('with mock kafka context', () => {
 
   it('apply mix of transform to stream', async () => {
     const data = [{a: 1}, {b: 2}, {c: 3}, {d: 4}, {e: 5}];
-    mockData = mockMessages(data, [0, 1, 2, 3, 4, 5]);
     const stream = createStreamHelper<typeof data[number]>()
       .map(msg => Object.assign(msg, {z: 1}))
       .window({
@@ -122,6 +124,7 @@ describe('with mock kafka context', () => {
       })
       .explode()
       .map(k => k + 'a');
+    mockData = mockMessages(data, stream.contexts, [0, 1, 2, 3, 4, 5]);
     let msgs = await stream.handleMessages();
     let expected = [{value: 'aa'}, {value: 'za'}, {value: 'ba'}, {value: 'za'}];
     expect(msgs).toMatchObject(expected);
@@ -133,6 +136,8 @@ describe('with mock kafka context', () => {
   it('flush statistics', async () => {
     const stream1 = createStreamHelper();
     const stream2 = createStreamHelper();
+    mockData = mockMessages([1, 2, 3, 4].slice(0, 2), stream1.contexts);
+    mockData.push(...mockMessages([1, 2, 3, 4].slice(2, 4), stream2.contexts));
     const stats = stream1.union(stream2).flushStatistics();
     expect(stats).toMatchObject({
       recvTotal: 2,
