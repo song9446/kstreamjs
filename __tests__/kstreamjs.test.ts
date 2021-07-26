@@ -138,7 +138,7 @@ describe('with real kafka', () => {
     const stream = stream1.union(stream2).writeTo(outTopic);
     stream.start();
 
-    await sleep(10_000);
+    await sleep(20_000);
     await stream.stop();
     const expectedData = [20, 1];
     expect(rdata.sort()).toEqual(expectedData.sort());
