@@ -42,10 +42,10 @@ describe('with mock kafka context', () => {
   afterAll(() => {
     jest.clearAllMocks();
   });
-  function createStreamHelper<T>() {
+  function createStreamHelper<T>(topic = 'in-topic') {
     return createStream<T>({
       brokers: ['a'],
-      inputTopic: 'in-topic',
+      inputTopic: topic,
       groupId: 'group-id',
     });
   }
@@ -101,14 +101,26 @@ describe('with mock kafka context', () => {
   });
   it('union streams', async () => {
     const data = [1, 2, 3, 4];
-    const stream2 = createStreamHelper<typeof data[0]>().map(i => i * 10);
-    const stream = createStreamHelper<typeof data[0]>().union(stream2);
+    const stream2 = createStreamHelper<typeof data[0]>('s2').map(i => i * 10);
+    const stream = createStreamHelper<typeof data[0]>('s1').union(stream2);
     mockData = mockMessages(data.slice(0, 2), stream.contexts);
     mockData.push(...mockMessages(data.slice(2, 4), stream2.contexts));
     const msgs = [];
     for (let i = 0; i < 4; ++i) msgs.push(...(await stream.handleMessages()));
     const expected = [{value: 1}, {value: 20}, {value: 3}, {value: 40}];
     expect(msgs).toMatchObject(expected);
+  });
+  it('union streams with dead stream', async () => {
+    const data = [1, 2, 3, 4];
+    const stream2 = createStreamHelper<typeof data[0]>().blackhole();
+    const stream = createStreamHelper<typeof data[0]>().union(stream2);
+    mockData = mockMessages(data.slice(0, 2), stream.contexts);
+    mockData.push(...mockMessages(data.slice(2, 4), stream2.contexts));
+    const msgs = [];
+    for (let i = 0; i < 4; ++i) msgs.push(...(await stream.handleMessages()));
+    const expected = [1, 3, 4];
+    expect(msgs.map(m => m.value).sort()).toEqual(expected.sort());
+    await stream.stop();
   });
 
   it('apply mix of transform to stream', async () => {

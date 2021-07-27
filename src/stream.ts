@@ -7,18 +7,13 @@ import {
   Statistics,
 } from './context';
 
-type ElementOf<T> = T extends readonly (infer ET)[] ? ET : never;
-
-function findLastIndex<T>(
-  array: Array<T>,
-  predicate: (value: T, index: number, obj: T[]) => boolean
-): number {
-  let l = array.length;
-  while (l--) {
-    if (predicate(array[l], l, array)) return l;
-  }
-  return -1;
-}
+import {
+  ElementOf,
+  sleep,
+  findLastIndex,
+  firstPromiseResolveOrSkip,
+  SKIPPED,
+} from './utils';
 
 export class Stream<O> {
   contexts: StreamContext[];
@@ -201,17 +196,25 @@ export class Stream<O> {
   union(other: Stream<O>): Stream<O> {
     let messageQueue: Message<O>[] = [];
     const myHandleMessages = this.handleMessages;
+    let handleMessages1IsRunning = false;
+    let handleMessages2IsRunning = false;
     const handleMessages1 = async () => {
+      if (handleMessages1IsRunning) throw SKIPPED;
+      handleMessages1IsRunning = true;
       const res = await myHandleMessages();
       messageQueue.push(...res);
+      handleMessages1IsRunning = false;
     };
     const handleMessages2 = async () => {
+      if (handleMessages2IsRunning) throw SKIPPED;
+      handleMessages2IsRunning = true;
       const res = await other.handleMessages();
       messageQueue.push(...res);
+      handleMessages2IsRunning = false;
     };
     this.handleMessages = async () => {
       if (messageQueue.length === 0)
-        await Promise.any([handleMessages1(), handleMessages2()]);
+        await firstPromiseResolveOrSkip([handleMessages1(), handleMessages2()]);
       if (messageQueue.length > 0) {
         const messages = messageQueue;
         messageQueue = [];
@@ -222,6 +225,15 @@ export class Stream<O> {
     };
     this.contexts.push(...other.contexts);
     return this;
+  }
+  blackhole(): Stream<O> {
+    return new Stream(this.contexts, async () => {
+      const messages = await this.handleMessages();
+      while (this.contexts.every(c => !c.isDisconnected())) {
+        await sleep(1000);
+      }
+      return messages;
+    });
   }
   writeTo(topic: string): Stream<O> {
     return new Stream(this.contexts, async () => {
@@ -237,10 +249,8 @@ export class Stream<O> {
       .reduce((acc, s) => acc.merge(s));
   }
   async start(): Promise<Stream<O>> {
-    let done = false;
     await Promise.all(this.contexts.map(c => c.start()));
-    for (const c of this.contexts) c.onDisconnect(() => (done = true));
-    while (!done) {
+    while (this.contexts.every(c => !c.isDisconnected())) {
       await this.handleMessages();
     }
     return this;

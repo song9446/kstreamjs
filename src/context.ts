@@ -70,6 +70,7 @@ export class StreamContext {
   messageChannel: Channel<EachMessagePayload> = new Channel(1000);
   fromBeginning: boolean;
   logger: Logger;
+  disconnected = false;
 
   constructor(option: StreamContextOption) {
     this.kafka = new Kafka({
@@ -105,6 +106,10 @@ export class StreamContext {
     this.commitTimer = setInterval(() => {
       this.consumer.commitOffsets(this.commitOffsets);
     }, this.commitInterval);
+
+    this.consumer.on(this.consumer.events.DISCONNECT, () => {
+      this.disconnected = true;
+    });
   }
   async send<T>(topic: string, messages: Message<T>[]) {
     await this.producer.send({
@@ -180,9 +185,6 @@ export class StreamContext {
     }
     //this.commitOffsets = Object.values(commitOffsets);
   }
-  async onDisconnect(callback: (...args: unknown[]) => void) {
-    this.consumer.on(this.consumer.events.DISCONNECT, callback);
-  }
   async seek(timestamp: number) {
     const offsets = await this.admin.fetchTopicOffsetsByTimestamp(
       this.inputTopic,
@@ -197,10 +199,14 @@ export class StreamContext {
     }
   }
   async disconnect() {
+    this.disconnected = true;
     await this.consumer.disconnect();
     await this.producer.disconnect();
     await this.admin.disconnect();
     if (this.commitTimer) clearInterval(this.commitTimer);
+  }
+  isDisconnected(): boolean {
+    return this.disconnected;
   }
   flushStatistics(): Statistics {
     const lastStatistics = this.statistics;
