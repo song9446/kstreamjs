@@ -12,7 +12,6 @@ import {
   sleep,
   findLastIndex,
   firstPromiseResolveOrSkip,
-  SKIPPED,
 } from './utils';
 
 export class Stream<O> {
@@ -194,34 +193,35 @@ export class Stream<O> {
     });
   }
   union(other: Stream<O>): Stream<O> {
-    let messageQueue: Message<O>[] = [];
+    //let messageQueue: Message<O>[] = [];
+    //let messageQueue: Channel<O>[] = [];
     const myHandleMessages = this.handleMessages;
-    let handleMessages1IsRunning = false;
-    let handleMessages2IsRunning = false;
-    const handleMessages1 = async () => {
-      if (handleMessages1IsRunning) throw SKIPPED;
-      handleMessages1IsRunning = true;
-      const res = await myHandleMessages();
-      messageQueue.push(...res);
-      handleMessages1IsRunning = false;
+    /*let handleMessages1IsRunning = false;
+    let handleMessages2IsRunning = false;*/
+    let handleMessages1Fut: Promise<Message<O>[]> | null = null;
+    let handleMessages2Fut: Promise<Message<O>[]> | null = null;
+    const handleMessages1 = async (): Promise<[number, Message<O>[]]> => {
+      if (handleMessages1Fut === null) {
+        handleMessages1Fut = myHandleMessages();
+      }
+      const msgs = await handleMessages1Fut;
+      return [1, msgs];
     };
-    const handleMessages2 = async () => {
-      if (handleMessages2IsRunning) throw SKIPPED;
-      handleMessages2IsRunning = true;
-      const res = await other.handleMessages();
-      messageQueue.push(...res);
-      handleMessages2IsRunning = false;
+    const handleMessages2 = async (): Promise<[number, Message<O>[]]> => {
+      if (handleMessages2Fut === null) {
+        handleMessages2Fut = other.handleMessages();
+      }
+      const msgs = await handleMessages2Fut;
+      return [2, msgs];
     };
     this.handleMessages = async () => {
-      if (messageQueue.length === 0)
-        await firstPromiseResolveOrSkip([handleMessages1(), handleMessages2()]);
-      if (messageQueue.length > 0) {
-        const messages = messageQueue;
-        messageQueue = [];
-        return messages;
-      } else {
-        return [];
-      }
+      const [index, msgs] = await firstPromiseResolveOrSkip([
+        handleMessages1(),
+        handleMessages2(),
+      ]);
+      if (index === 1) handleMessages1Fut = null;
+      else handleMessages2Fut = null;
+      return msgs;
     };
     this.contexts.push(...other.contexts);
     return this;

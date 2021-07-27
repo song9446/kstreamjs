@@ -17,7 +17,9 @@ export function findLastIndex<T>(
 
 export const SKIPPED = Symbol('Skipped');
 
-export function firstPromiseResolveOrSkip(promises: Promise<unknown>[]) {
+export function firstPromiseResolveOrSkip<T>(
+  promises: Promise<T>[]
+): Promise<T> {
   let skippedCount = 0;
   return new Promise((res, rej) => {
     promises.forEach(p => {

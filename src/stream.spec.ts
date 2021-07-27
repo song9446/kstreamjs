@@ -107,8 +107,8 @@ describe('with mock kafka context', () => {
     mockData.push(...mockMessages(data.slice(2, 4), stream2.contexts));
     const msgs = [];
     for (let i = 0; i < 4; ++i) msgs.push(...(await stream.handleMessages()));
-    const expected = [{value: 1}, {value: 20}, {value: 3}, {value: 40}];
-    expect(msgs).toMatchObject(expected);
+    const expected = [1, 20, 3, 40];
+    expect(msgs.map(msg => msg.value)).toStrictEqual(expected);
   });
   it('union streams with dead stream', async () => {
     const data = [1, 2, 3, 4];

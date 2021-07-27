@@ -1,6 +1,6 @@
 {
   "name": "kstreamjs",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "kstream inspired nodejs kafka stream framework backed by kafkajs",
   "author": "song9446",
   "main": "build/src/index.js",
