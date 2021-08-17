@@ -39,9 +39,14 @@ export interface Offset {
 export class Statistics {
   public recvTotal = 0;
   public sendTotal = 0;
+  public lastSentMessageTimestamp = 0;
   merge(other: Statistics): Statistics {
     this.recvTotal += other.recvTotal;
     this.sendTotal += other.sendTotal;
+    this.lastSentMessageTimestamp = Math.max(
+      other.lastSentMessageTimestamp,
+      this.lastSentMessageTimestamp
+    );
     return this;
   }
 }
@@ -118,6 +123,8 @@ export class StreamContext {
       messages: messages.map(({value}) => ({value: JSON.stringify(value)})),
     });
     this.statistics.sendTotal += messages.length;
+    this.statistics.lastSentMessageTimestamp =
+      messages[messages.length - 1].metadata.message.timestamp;
     this.updateCommitOffsets(messages);
   }
   async receive<T>(): Promise<Message<T>[] | undefined> {
