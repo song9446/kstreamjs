@@ -66,6 +66,17 @@ describe('with mock kafka context', () => {
     const expected = [{value: {a: 2}}];
     expect(msgs).toMatchObject(expected);
   });
+  it('async maps stream', async () => {
+    const data = {a: 1};
+    const stream = createStreamHelper<typeof data>().mapAsync(async i => ({
+      a: i['a'] + 1,
+    }));
+    mockData = mockMessages([data], stream.contexts);
+    const msgs = await stream.handleMessages();
+    const expected = [{value: {a: 2}}];
+    expect(msgs).toMatchObject(expected);
+  });
+
   it('filter stream', async () => {
     const data = [{a: 1}, {a: 2}, {a: 3}, {a: 1}];
     const stream = createStreamHelper<typeof data[number]>().filter(

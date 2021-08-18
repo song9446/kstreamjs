@@ -43,6 +43,19 @@ export class Stream<O> {
       }));
     });
   }
+  mapAsync<N>(
+    next: (value: O, metadata: MessageMetadata) => Promise<N>
+  ): Stream<N> {
+    return new Stream(this.contexts, async () => {
+      const messages = await this.handleMessages();
+      return await Promise.all(
+        messages.map(async msg => ({
+          value: await next(msg.value, msg.metadata),
+          metadata: msg.metadata,
+        }))
+      );
+    });
+  }
   filter(test: (value: O, metadata: MessageMetadata) => boolean): Stream<O> {
     const lastHandleMessages = this.handleMessages;
     this.handleMessages = async () => {
