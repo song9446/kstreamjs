@@ -243,6 +243,14 @@ export class Stream<O> {
       return messages;
     });
   }
+  commit(): Stream<O> {
+    return new Stream(this.contexts, async () => {
+      const messages = await this.handleMessages();
+      if (messages && messages.length > 0)
+        await this.contexts[0].updateCommitOffsets(messages);
+      return messages;
+    });
+  }
   flushStatistics(): Statistics {
     return this.contexts
       .map(c => c.flushStatistics())
