@@ -5,14 +5,14 @@ import {
   Offset,
   StreamContextOption,
   Statistics,
-} from './context';
+} from './context.js';
 
 import {
   ElementOf,
   sleep,
   findLastIndex,
   firstPromiseResolveOrSkip,
-} from './utils';
+} from './utils.js';
 
 export class Stream<O> {
   contexts: StreamContext[];
@@ -206,11 +206,7 @@ export class Stream<O> {
     });
   }
   union(other: Stream<O>): Stream<O> {
-    //let messageQueue: Message<O>[] = [];
-    //let messageQueue: Channel<O>[] = [];
     const myHandleMessages = this.handleMessages;
-    /*let handleMessages1IsRunning = false;
-    let handleMessages2IsRunning = false;*/
     let handleMessages1Fut: Promise<Message<O>[]> | null = null;
     let handleMessages2Fut: Promise<Message<O>[]> | null = null;
     const handleMessages1 = async (): Promise<[number, Message<O>[]]> => {

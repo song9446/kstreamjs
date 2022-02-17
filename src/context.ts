@@ -10,7 +10,7 @@ import {
 
 import {Channel} from 'node-channel';
 
-import {Logger} from './logger';
+import {Logger} from './logger.js';
 
 export type MessageMetadata = Omit<EachMessagePayload, 'message'> & {
   message: Omit<KafkaMessage, 'value' | 'timestamp'> & {

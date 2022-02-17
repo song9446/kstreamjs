@@ -10,6 +10,7 @@ function mockMessages<T>(
     metadata: {
       topic: '',
       partition: 0,
+      heartbeat: async () => {},
       contexts: contexts,
       message: {
         timestamp: timestampes[i] || 0,
