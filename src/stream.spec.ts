@@ -1,5 +1,5 @@
-import {StreamContext, Message, Statistics} from './context';
-import {createStream} from './stream';
+import {StreamContext, Message, Statistics} from './context.js';
+import {createStream} from './stream.js';
 
 function mockMessages<T>(
   values: T[],

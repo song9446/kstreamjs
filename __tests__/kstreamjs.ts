@@ -1,6 +1,6 @@
 import {KafkaContainer, StartedKafkaContainer} from 'testcontainers';
 import {Kafka, Producer, Consumer, Admin, logLevel} from 'kafkajs';
-import {createStream} from '../src';
+import {createStream} from '../src/index.js';
 
 function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
