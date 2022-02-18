@@ -97,13 +97,14 @@ describe('with mock kafka context', () => {
     expect(msgs).toMatchObject(expected);
   });
   it('aggregates stream by window', async () => {
-    const data = [{a: 1}, {a: 2}, {a: 3}, {a: 4}, {a: 5}];
+    const data = [{a: 1}, {a: 5}, {a: 2}, {a: 4}, {a: 3}];
     const stream = createStreamHelper<typeof data[0]>().window({
       from: 0,
       interval: 2,
+      bufferInterval: 10,
       collect: msgs => msgs.reduce((acc, i) => i['a'] + acc, 0),
     });
-    mockData = mockMessages(data, stream.contexts, [0, 1, 2, 3, 4, 5]);
+    mockData = mockMessages(data, stream.contexts, [0, 4, 1, 3, 2]);
     let msgs = await stream.handleMessages();
     let expected = [{value: 3}];
     expect(msgs).toMatchObject(expected);

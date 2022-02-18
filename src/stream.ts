@@ -10,8 +10,8 @@ import {
 import {
   ElementOf,
   sleep,
-  findLastIndex,
   firstPromiseResolveOrSkip,
+  partition,
 } from './utils.js';
 
 export class Stream<O> {
@@ -110,99 +110,59 @@ export class Stream<O> {
     from: number;
     interval: number;
     collect: (msgs: O[]) => N;
+    bufferInterval?: number;
   }): Stream<N> {
-    const messageQueue: Message<O>[] = [];
+    //const messageQueue: Message<O>[] = [];
+    const msgQ: Message<O>[] = [];
     const interval = option.interval;
     const collect = option.collect;
+    const bufferInterval = option.bufferInterval ?? 1000 * 60;
     let from = option.from;
     let to = from + interval;
     return new Stream<N>(this.contexts, async () => {
-      if (
-        messageQueue.length > 0 &&
-        messageQueue[messageQueue.length - 1].metadata.message.timestamp > to
-      ) {
-        this.contexts[0].logger.debug(
-          `last message timestamp is larger than ${new Date(
-            to
-          )}. return message queue immediately`
-        );
-        const msg = this._concatMessages(
-          messageQueue.splice(
-            0,
-            findLastIndex(
-              messageQueue,
-              (msg: Message<O>) => msg.metadata.message.timestamp < to
-            ) + 1
-          )
-        );
-        from = to;
-        to = to + interval;
-        return [
-          {
-            metadata: msg.metadata,
-            value: collect(msg.value),
-          },
-        ];
-      }
-      let messages = await this.handleMessages();
-      if (messages[0].metadata.message.timestamp > to) {
-        this.contexts[0].logger.debug(
-          `first message timestamp(${new Date(
-            messages[0].metadata.message.timestamp
-          )}) is larger than ${new Date(to)}. bump up window offset`
-        );
-      }
-      while (messages[0].metadata.message.timestamp > to) {
-        from = to;
-        to = to + interval;
-      }
-
-      if (
-        messages.length === 0 ||
-        messages[messages.length - 1].metadata.message.timestamp < from
-      ) {
-        this.contexts[0].logger.warn(
-          'last commit timestamp is too past from the window. skip all messages between the last commit ts and the start of window ts'
-        );
-        await Promise.all(this.contexts.map(c => c.seek(from)));
-        do {
-          messages = await this.handleMessages();
-        } while (
-          messages.length === 0 ||
-          messages[messages.length - 1].metadata.message.timestamp < from
-        );
-      }
-      messageQueue.push(
-        ...messages.filter(msg => msg.metadata.message.timestamp >= from)
-      );
       while (
-        messageQueue.length === 0 ||
-        messageQueue[messageQueue.length - 1].metadata.message.timestamp < to
+        msgQ.length === 0 ||
+        msgQ[msgQ.length - 1].metadata.message.timestamp < to + bufferInterval
       ) {
-        messages = await this.handleMessages();
-        messageQueue.push(...messages);
-      }
-      messageQueue.sort(
-        (a, b) => a.metadata.message.timestamp - b.metadata.message.timestamp
-      );
+        const messages = await this.handleMessages();
+        if (messages.length === 0) break;
 
-      const msg = this._concatMessages(
-        messageQueue.splice(
-          0,
-          findLastIndex(
-            messageQueue,
-            (msg: Message<O>) => msg.metadata.message.timestamp < to
-          ) + 1
-        )
+        const [inbounds, outbounds] = partition(
+          messages,
+          msg => msg.metadata.message.timestamp >= from
+        );
+
+        if (outbounds.length > 0) {
+          if (inbounds.length === 0) {
+            this.contexts[0].logger.warn(
+              'last commit timestamp is too past from the window. skip all messages between the last commit ts and the start of window ts'
+            );
+            await Promise.all(this.contexts.map(c => c.seek(from)));
+            continue;
+          } else {
+            this.contexts[0].logger.debug(
+              `${fail.length} messages are behind the target period.`
+            );
+          }
+        }
+        msgQ.push(...inbounds);
+      }
+      const [inbounds, outbounds] = partition(
+        msgQ,
+        msg => msg.metadata.message.timestamp < to
       );
       from = to;
       to = to + interval;
-      return [
-        {
-          metadata: msg.metadata,
-          value: collect(msg.value),
-        },
-      ];
+      if (inbounds.length > 0) {
+        msgQ.splice(0, msgQ.length, ...outbounds);
+        const messagePack = this._concatMessages(inbounds);
+        return [
+          {
+            metadata: messagePack.metadata,
+            value: collect(messagePack.value),
+          },
+        ];
+      } else return [];
     });
   }
   union(other: Stream<O>): Stream<O> {

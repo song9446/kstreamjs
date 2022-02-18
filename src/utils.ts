@@ -39,3 +39,13 @@ export function firstPromiseResolveOrSkip<T>(
     });
   });
 }
+
+export function partition<T>(
+  array: T[],
+  filter: (cond: T, idx: number, arr: T[]) => boolean
+): [T[], T[]] {
+  const pass: T[] = [];
+  const fail: T[] = [];
+  array.forEach((e, idx, arr) => (filter(e, idx, arr) ? pass : fail).push(e));
+  return [pass, fail];
+}
