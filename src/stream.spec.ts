@@ -8,6 +8,7 @@ function mockMessages<T>(
 ): Message<T>[] {
   return values.map((value, i) => ({
     metadata: {
+      pause: () => {return () => {}},
       topic: '',
       partition: 0,
       heartbeat: async () => {},
