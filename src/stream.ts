@@ -27,7 +27,7 @@ export class Stream<O> {
       this.handleMessages = async () => {
         const msg = await this.contexts[0].receive<O>();
         if (msg === undefined) throw Error('channel is closed');
-        else return msg!;
+        else return msg;
       };
     else
       throw Error(
@@ -83,20 +83,23 @@ export class Stream<O> {
   }
   _concatMessages<T>(messages: Message<T>[]): Message<T[]> {
     /* keep first metadata while commit last metdata */
-    const offsets = messages.reduce((acc, m) => {
-      const key = `${m.metadata.topic}:${m.metadata.partition}`;
-      acc[key] = {
-        partition: m.metadata.partition,
-        topic: m.metadata.topic,
-        offset: String(
-          Math.max(
-            Number(acc[key]?.offset || 0),
-            Number(m.metadata.message.offset)
-          )
-        ),
-      };
-      return acc;
-    }, {} as Record<string, Offset>);
+    const offsets = messages.reduce(
+      (acc, m) => {
+        const key = `${m.metadata.topic}:${m.metadata.partition}`;
+        acc[key] = {
+          partition: m.metadata.partition,
+          topic: m.metadata.topic,
+          offset: String(
+            Math.max(
+              Number(acc[key]?.offset || 0),
+              Number(m.metadata.message.offset)
+            )
+          ),
+        };
+        return acc;
+      },
+      {} as Record<string, Offset>
+    );
     const contexts = messages.map(m => m.metadata.contexts).flat();
     return {
       metadata: Object.assign(messages[0].metadata, {
