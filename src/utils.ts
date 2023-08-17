@@ -49,3 +49,9 @@ export function partition<T>(
   array.forEach((e, idx, arr) => (filter(e, idx, arr) ? pass : fail).push(e));
   return [pass, fail];
 }
+
+export function isAsync<T, U extends unknown[]>(
+  fn: ((...args: U) => T) | ((...args: U) => Promise<T>)
+): fn is (...args: U) => Promise<T> {
+  return fn.constructor.name === 'AsyncFunction';
+}

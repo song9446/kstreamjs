@@ -12,6 +12,7 @@ import {
   sleep,
   firstPromiseResolveOrSkip,
   partition,
+  isAsync,
 } from './utils.js';
 
 export class Stream<O> {
@@ -34,35 +35,41 @@ export class Stream<O> {
         'Wrong Stream Initializer Parameters. It must be either of Multiple contexts with handler or single context without handler'
       );
   }
-  map<N>(next: (value: O, metadata: MessageMetadata) => N): Stream<N> {
-    return new Stream(this.contexts, async () => {
-      const messages = await this.handleMessages();
-      return messages.map(msg => ({
-        value: next(msg.value, msg.metadata),
-        metadata: msg.metadata,
-      }));
-    });
-  }
-  mapAsync<N>(
-    next: (value: O, metadata: MessageMetadata) => Promise<N>
+  map<N>(
+    next: (value: O, metadata: MessageMetadata) => N | Promise<N>
   ): Stream<N> {
-    return new Stream(this.contexts, async () => {
+    return new Stream<N>(this.contexts, async () => {
       const messages = await this.handleMessages();
-      return await Promise.all(
-        messages.map(async msg => ({
-          value: await next(msg.value, msg.metadata),
-          metadata: msg.metadata,
-        }))
-      );
+      if (!isAsync(next))
+        return messages.map(({value, metadata}) => ({
+          value: next(value, metadata) as N,
+          metadata,
+        }));
+      else
+        return await Promise.all(
+          messages.map(async ({value, metadata}) => ({
+            value: await next(value, metadata),
+            metadata,
+          }))
+        );
     });
   }
-  filter(test: (value: O, metadata: MessageMetadata) => boolean): Stream<O> {
+  filter(
+    test: (value: O, metadata: MessageMetadata) => boolean | Promise<boolean>
+  ): Stream<O> {
     const lastHandleMessages = this.handleMessages;
     this.handleMessages = async () => {
       let messages: Message<O>[];
       do {
         messages = await lastHandleMessages();
-        messages = messages.filter(msg => test(msg.value, msg.metadata));
+        if (!isAsync(test))
+          messages = messages.filter(msg => test(msg.value, msg.metadata));
+        else {
+          const t = await Promise.all(
+            messages.map(msg => test(msg.value, msg.metadata))
+          );
+          messages = messages.filter((_, i) => t[i]);
+        }
       } while (messages.length === 0);
       return messages;
     };
@@ -112,7 +119,7 @@ export class Stream<O> {
   window<N>(option: {
     from: number;
     interval: number;
-    collect: (msgs: O[]) => N;
+    collect: (msgs: O[]) => N | Promise<N>;
     bufferInterval?: number;
   }): Stream<N> {
     //const messageQueue: Message<O>[] = [];
@@ -159,10 +166,13 @@ export class Stream<O> {
       if (inbounds.length > 0) {
         msgQ.splice(0, msgQ.length, ...outbounds);
         const messagePack = this._concatMessages(inbounds);
+        const maybePromise = collect(messagePack.value);
+        const value: N =
+          maybePromise instanceof Promise ? await maybePromise : maybePromise;
         return [
           {
             metadata: messagePack.metadata,
-            value: collect(messagePack.value),
+            value,
           },
         ];
       } else return [];
