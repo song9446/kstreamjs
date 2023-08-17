@@ -34,6 +34,9 @@ describe('with mock kafka context', () => {
     StreamContext.prototype.receive = jest.fn().mockImplementation(async () => {
       return mockData.splice(0, 1);
     });
+    StreamContext.prototype.seek = jest.fn().mockImplementation(async () => {
+      return undefined;
+    });
     StreamContext.prototype.flushStatistics = jest
       .fn()
       .mockImplementation(() => {

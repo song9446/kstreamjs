@@ -26,9 +26,9 @@ export class Stream<O> {
     if (handleMessages !== undefined) this.handleMessages = handleMessages;
     else if (contexts.length === 1)
       this.handleMessages = async () => {
-        const msg = await this.contexts[0].receive<O>();
-        if (msg === undefined) throw Error('channel is closed');
-        else return msg;
+        const msgs = await this.contexts[0].receive<O>();
+        if (msgs === undefined) throw Error('channel is closed');
+        else return msgs;
       };
     else
       throw Error(
@@ -107,7 +107,14 @@ export class Stream<O> {
       },
       {} as Record<string, Offset>
     );
-    const contexts = messages.map(m => m.metadata.contexts).flat();
+    const contextIds = new Set();
+    const contexts = messages.map(m => m.metadata.contexts.filter(ctx => {
+      if(!contextIds.has(ctx.id)) {
+        contextIds.add(ctx.id);
+        return true;
+      }
+      return false;
+    })).flat();
     return {
       metadata: Object.assign(messages[0].metadata, {
         offsets: Object.values(offsets),
@@ -129,7 +136,13 @@ export class Stream<O> {
     const bufferInterval = option.bufferInterval ?? 1000 * 60;
     let from = option.from;
     let to = from + interval;
+    let lastSeeked = -1;
+    let seeked = false;
     return new Stream<N>(this.contexts, async () => {
+      if(!seeked) {
+        seeked = true;
+        await Promise.all(this.contexts.map(c => c.seek(from)));
+      }
       while (
         msgQ.length === 0 ||
         msgQ[msgQ.length - 1].metadata.message.timestamp < to + bufferInterval
@@ -147,7 +160,10 @@ export class Stream<O> {
             this.contexts[0].logger.warn(
               'last commit timestamp is too past from the window. skip all messages between the last commit ts and the start of window ts'
             );
-            await Promise.all(this.contexts.map(c => c.seek(from)));
+            if(lastSeeked !== from) {
+              lastSeeked = from;
+              await Promise.all(this.contexts.map(c => c.seek(from)));
+            }
             continue;
           } else {
             this.contexts[0].logger.debug(
