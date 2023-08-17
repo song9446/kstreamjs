@@ -108,13 +108,17 @@ export class Stream<O> {
       {} as Record<string, Offset>
     );
     const contextIds = new Set();
-    const contexts = messages.map(m => m.metadata.contexts.filter(ctx => {
-      if(!contextIds.has(ctx.id)) {
-        contextIds.add(ctx.id);
-        return true;
-      }
-      return false;
-    })).flat();
+    const contexts = messages
+      .map(m =>
+        m.metadata.contexts.filter(ctx => {
+          if (!contextIds.has(ctx.id)) {
+            contextIds.add(ctx.id);
+            return true;
+          }
+          return false;
+        })
+      )
+      .flat();
     return {
       metadata: Object.assign(messages[0].metadata, {
         offsets: Object.values(offsets),
@@ -139,7 +143,7 @@ export class Stream<O> {
     let lastSeeked = -1;
     let seeked = false;
     return new Stream<N>(this.contexts, async () => {
-      if(!seeked) {
+      if (!seeked) {
         seeked = true;
         await Promise.all(this.contexts.map(c => c.seek(from)));
       }
@@ -160,7 +164,7 @@ export class Stream<O> {
             this.contexts[0].logger.warn(
               'last commit timestamp is too past from the window. skip all messages between the last commit ts and the start of window ts'
             );
-            if(lastSeeked !== from) {
+            if (lastSeeked !== from) {
               lastSeeked = from;
               await Promise.all(this.contexts.map(c => c.seek(from)));
             }
